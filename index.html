@@ -1,1 +1,82 @@
-test
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caldwell chronograph 2.0 BLE connect</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    #dataOutput {
+      height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="my-4">Caldwell chronograph 2.0 BLE connect</h1>
+    <button id="connectBtn" class="btn btn-primary mb-3">Connect to Bluetooth Device</button>
+    <div id="status" class="alert alert-secondary" role="alert">Status: Disconnected</div>
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Received Data</h5>
+        <pre id="dataOutput" class="p-2 border"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const connectBtn = document.getElementById('connectBtn');
+    const status = document.getElementById('status');
+    const dataOutput = document.getElementById('dataOutput');
+    let device, server, characteristic;
+
+    const SERVICE_UUID = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
+    const RX_CHARACTERISTIC_UUID = '49535343-1e4d-4bd9-ba61-23c647249616';
+
+    connectBtn.addEventListener('click', async () => {
+      status.classList.remove('alert-success', 'alert-danger');
+      status.classList.add('alert-secondary');
+      status.textContent = 'Status: Connecting...';
+
+      try {
+        device = await navigator.bluetooth.requestDevice({
+            filters: [{namePrefix: "Caldwell"}],
+            optionalServices: [SERVICE_UUID]
+        });
+
+        server = await device.gatt.connect();
+        status.textContent = `Status: Connected to ${device.name}`;
+        status.classList.replace('alert-secondary', 'alert-success');
+
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        characteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID);
+
+        characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', handleData);
+
+      } catch (error) {
+        console.error(error);
+        status.textContent = `Error: ${error.message}`;
+        status.classList.replace('alert-secondary', 'alert-danger');
+      }
+    });
+
+    function handleData(event) {
+      const value = event.target.value;
+      let data = '';
+      for (let i = 0; i < value.byteLength; i++) {
+        data += String.fromCharCode(value.getUint8(i));
+      }
+      dataOutput.textContent += data + '\n';
+      dataOutput.scrollTop = dataOutput.scrollHeight;
+    }
+
+    window.addEventListener('unload', () => {
+      if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+      }
+    });
+  </script>
+</body>
+</html>
